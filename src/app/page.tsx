@@ -19,7 +19,7 @@ const TACNA_CENTER: GeoCoordinates = { lat: -18.0146, lng: -70.2534 };
 const HEADER_HEIGHT = '4rem'; // approx height of AppHeader (h-16)
 const PAGE_VERTICAL_PADDING = '2rem'; // sum of p-4 top and bottom for the main content area
 const SIDEBAR_TOP_OFFSET = `calc(${HEADER_HEIGHT} + 1rem)`; // Header + 1rem top padding of parent
-const CONTENT_EFFECTIVE_MAX_HEIGHT = `calc(100vh - ${HEADER_HEIGHT} - ${PAGE_VERTICAL_PADDING})`;
+const CONTENT_EFFECTIVE_MAX_HEIGHT = `calc(100vh - ${HEADER_HEIGHT} - ${PAGE_VERTICAL_PADDING} - 10rem)`; // Adjusted for new text
 
 
 export default function HomePage() {
@@ -66,9 +66,25 @@ export default function HomePage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <AppHeader />
-      <main className="flex-grow flex flex-col">
+      <main className="flex-grow flex flex-col p-4">
+        {/* Welcome and Map Title Section */}
+        <section className="mb-6 text-center lg:text-left">
+          <h1 className="text-3xl font-bold text-primary font-headline mb-2">
+            Bienvenido a Tacna Transit Navigator
+          </h1>
+          <p className="text-lg text-muted-foreground mb-4">
+            Optimice sus viajes en bus por Tacna. Evite congestiones y rutas bloqueadas.
+          </p>
+          <h2 className="text-2xl font-semibold text-foreground mb-1">
+            Mapa de Rutas de Tacna (Google Maps)
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Visualización del estado actual de las rutas. Puede seleccionar origen y destino en el formulario de abajo.
+          </p>
+        </section>
+
         {/* Top part: Sidebar and Map */}
-        <div className="flex-grow flex flex-col lg:flex-row p-4 gap-4">
+        <div className="flex-grow flex flex-col lg:flex-row gap-4">
           {/* Sidebar Area */}
           <aside className="lg:w-1/3 xl:w-1/4 space-y-4 order-last lg:order-first 
                            lg:sticky lg:top-[var(--sidebar-top-offset)] 
@@ -118,8 +134,8 @@ export default function HomePage() {
         </div>
 
         {/* Comments Section below map and sidebar */}
-        <section className="p-4 border-t mt-auto bg-background">
-          <div className="container mx-auto">
+        <section className="pt-6 border-t mt-6 bg-background">
+          <div className="container mx-auto px-0">
             <h2 className="text-2xl font-bold mb-4 text-primary font-headline">Comentarios de Usuarios</h2>
             {isLoadingComments ? (
               <div className="flex justify-center items-center py-8">
