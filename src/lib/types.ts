@@ -8,7 +8,8 @@ export type ObstructionType = 'construction' | 'closure' | 'event' | 'accident' 
 
 export interface Obstruction {
   id: string;
-  coordinates: GeoCoordinates;
+  coordinates: GeoCoordinates; // Start point for a segment, or the point for a point-obstruction
+  endCoordinates?: GeoCoordinates; // End point if it's a segment obstruction
   type: ObstructionType;
   description: string;
   title: string;
@@ -38,4 +39,13 @@ export interface Route {
   pathDescription: string; // e.g., "Plaza de Armas - Mercado Central - Hospital Regional"
   status: RouteStatus;
   // Potentially add waypoints or a polyline string for map display later
+}
+
+// Updated to include optional endCoordinates
+export interface AddObstructionData {
+  coordinates: GeoCoordinates;
+  endCoordinates?: GeoCoordinates;
+  type: ObstructionType;
+  title: string;
+  description: string;
 }

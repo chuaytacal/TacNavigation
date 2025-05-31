@@ -4,7 +4,7 @@ import type { Obstruction, Comment, Route } from './types';
 export const initialObstructions: Obstruction[] = [
   {
     id: 'obs1',
-    coordinates: { lat: -18.006, lng: -70.248 },
+    coordinates: { lat: -18.006, lng: -70.248 }, // Point obstruction
     type: 'construction',
     title: 'Roadworks on Av. Bolognesi',
     description: 'Major road construction on Avenida Bolognesi near the central market. Expect delays.',
@@ -12,11 +12,20 @@ export const initialObstructions: Obstruction[] = [
   },
   {
     id: 'obs2',
-    coordinates: { lat: -18.014, lng: -70.253 },
+    coordinates: { lat: -18.014, lng: -70.253 }, // Start of segment
+    endCoordinates: { lat: -18.0135, lng: -70.252 }, // End of segment
     type: 'closure',
-    title: 'Street Fair Closure',
-    description: 'Calle San Martin closed for a local festival until Sunday evening.',
+    title: 'Street Fair Closure on San Martin',
+    description: 'Calle San Martin closed for a local festival between indicated points until Sunday evening.',
     addedAt: new Date(Date.now() - 86400000 * 1).toISOString(), // 1 day ago
+  },
+  {
+    id: 'obs3',
+    coordinates: { lat: -18.010, lng: -70.250 }, // Point obstruction
+    type: 'accident',
+    title: 'Minor Accident',
+    description: 'Minor accident at the intersection, causing slight delays.',
+    addedAt: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
   },
 ];
 

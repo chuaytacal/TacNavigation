@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { Obstruction, Comment, ObstructionType, GeoCoordinates, CommentFormData, Route, RouteStatus } from './types';
+import type { Obstruction, Comment, ObstructionType, GeoCoordinates, CommentFormData, Route, RouteStatus, AddObstructionData } from './types';
 import { initialObstructions, initialComments, initialRoutes } from './mock-data';
 
 // Simulate a database. In a real app, use a proper database.
@@ -13,17 +13,14 @@ export async function getObstructions(): Promise<Obstruction[]> {
   return JSON.parse(JSON.stringify(obstructionsStore)); // Return a copy
 }
 
-export interface AddObstructionData {
-  coordinates: GeoCoordinates;
-  type: ObstructionType;
-  title: string;
-  description: string;
-}
-
 export async function addObstructionAction(data: AddObstructionData): Promise<Obstruction> {
   const newObstruction: Obstruction = {
-    ...data,
     id: `obs-${Date.now().toString()}-${Math.random().toString(36).substring(7)}`,
+    coordinates: data.coordinates,
+    endCoordinates: data.endCoordinates, // Save endCoordinates if provided
+    type: data.type,
+    title: data.title,
+    description: data.description,
     addedAt: new Date().toISOString(),
   };
   obstructionsStore.push(newObstruction);
