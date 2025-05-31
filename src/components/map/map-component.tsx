@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Map, AdvancedMarker, Pin, InfoWindow, useMap, MapControl, ControlPosition } from '@vis.gl/react-google-maps';
@@ -15,6 +16,7 @@ interface MapComponentProps {
   enableTrafficLayer?: boolean;
   selectedObstructionForRoute?: Obstruction | null;
   interactive?: boolean; // for admin map
+  children?: React.ReactNode; // To allow passing controls like MapControlWrapper
 }
 
 const obstructionIcons: Record<Obstruction['type'], React.ReactNode> = {
@@ -35,20 +37,40 @@ const obstructionPinColors: Record<Obstruction['type'], { background: string; gl
 
 function RoutePolyline({ route }: { route: google.maps.DirectionsResult }) {
   const map = useMap();
+  const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer | null>(null);
 
   useEffect(() => {
-    if (!map || !route) return;
-
-    const directionsRenderer = new google.maps.DirectionsRenderer({
-      suppressMarkers: true, // We can add custom markers if needed
-    });
-    directionsRenderer.setMap(map);
-    directionsRenderer.setDirections(route);
-
+    if (!map) return;
+    if (!directionsRenderer) {
+      // Suppress default markers (A, B) if you want to add custom ones later
+      // Or let it draw default markers. For now, default markers are fine.
+      const renderer = new google.maps.DirectionsRenderer({
+         polylineOptions: {
+          strokeColor: '#FF8A65', // Example: Orange accent color
+          strokeWeight: 5,
+          strokeOpacity: 0.8,
+        },
+        // suppressMarkers: true, // Uncomment if you add custom start/end markers
+      });
+      renderer.setMap(map);
+      setDirectionsRenderer(renderer);
+    }
+    
     return () => {
-      directionsRenderer.setMap(null);
+      if (directionsRenderer) {
+        directionsRenderer.setMap(null);
+      }
     };
-  }, [map, route]);
+  }, [map, directionsRenderer]);
+
+  useEffect(() => {
+    if (directionsRenderer && route) {
+      directionsRenderer.setDirections(route);
+    } else if (directionsRenderer) {
+      // Clear route if route prop is null
+      directionsRenderer.setDirections(undefined); 
+    }
+  }, [route, directionsRenderer]);
 
   return null;
 }
@@ -61,22 +83,25 @@ export function MapComponent({
   onMapClick,
   enableTrafficLayer = false,
   interactive = true,
+  children,
 }: MapComponentProps) {
   const [selectedObstruction, setSelectedObstruction] = useState<Obstruction | null>(null);
-  const map = useMap();
+  const map = useMap(); // Get map instance for traffic layer
 
   const handleMapClick = useCallback((event: google.maps.MapMouseEvent) => {
-    if (onMapClick && event.latLng) {
+    if (onMapClick && event.latLng && interactive) {
       onMapClick({ lat: event.latLng.lat(), lng: event.latLng.lng() });
     }
-  }, [onMapClick]);
+  }, [onMapClick, interactive]);
   
   useEffect(() => {
     if (map && enableTrafficLayer) {
       const trafficLayer = new google.maps.TrafficLayer();
       trafficLayer.setMap(map);
       return () => {
-        trafficLayer.setMap(null);
+        if (trafficLayer) {
+          trafficLayer.setMap(null);
+        }
       };
     }
   }, [map, enableTrafficLayer]);
@@ -86,7 +111,7 @@ export function MapComponent({
       <Map
         defaultCenter={initialCenter}
         defaultZoom={initialZoom}
-        mapId={process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "TACNA_TRANSIT_FLOW_MAP_ID"} // Optional: for custom map styles
+        mapId={process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "TACNA_TRANSIT_FLOW_MAP_ID"}
         gestureHandling={interactive ? "auto" : "none"}
         zoomControl={interactive}
         streetViewControl={interactive}
@@ -94,6 +119,8 @@ export function MapComponent({
         fullscreenControl={interactive}
         onClick={handleMapClick}
         className="w-full h-full"
+        // Performance: disable default UI when not interactive or to simplify
+        disableDefaultUI={!interactive}
       >
         {obstructionsToDisplay.map((obstruction) => (
           <AdvancedMarker
@@ -116,7 +143,7 @@ export function MapComponent({
           <InfoWindow
             position={selectedObstruction.coordinates}
             onCloseClick={() => setSelectedObstruction(null)}
-            pixelOffset={new google.maps.Size(0, -40)}
+            pixelOffset={new google.maps.Size(0, -40)} // Adjust based on Pin size
           >
             <div className="p-2 max-w-xs">
               <h3 className="text-md font-semibold mb-1 font-headline">{selectedObstruction.title}</h3>
@@ -128,12 +155,12 @@ export function MapComponent({
         )}
         
         {routeToDisplay && <RoutePolyline route={routeToDisplay} />}
+        {children}
       </Map>
     </div>
   );
 }
 
-// This component is for placing controls on the map
 export function MapControlWrapper({ children, position = ControlPosition.TOP_LEFT }: { children: React.ReactNode, position?: ControlPosition }) {
   return (
     <MapControl position={position}>
@@ -143,3 +170,4 @@ export function MapControlWrapper({ children, position = ControlPosition.TOP_LEF
     </MapControl>
   );
 }
+

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -47,7 +48,7 @@ export function RoutePlanner({ onRouteCalculated, obstructions = [] }: RoutePlan
       origin,
       destination,
       travelMode: google.maps.TravelMode.DRIVING,
-      provideRouteAlternatives: true,
+      provideRouteAlternatives: true, // Good to have alternatives, usually first is best
       drivingOptions: {
         departureTime: new Date(), // for traffic consideration
         trafficModel: google.maps.TrafficModel.BEST_GUESS,
@@ -112,7 +113,7 @@ export function RoutePlanner({ onRouteCalculated, obstructions = [] }: RoutePlan
           )}
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full" disabled={isLoading || !directionsService}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
             Find Route
           </Button>

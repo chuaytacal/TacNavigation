@@ -92,7 +92,10 @@ export default function HomePage() {
                        lg:overflow-y-auto rounded-lg shadow-lg border bg-card p-4"
             style={{ '--sidebar-top-offset': SIDEBAR_TOP_OFFSET, '--content-max-height': CONTENT_EFFECTIVE_MAX_HEIGHT } as React.CSSProperties}
           >
-            <RoutePlanner onRouteCalculated={setCurrentRoute} obstructions={obstructions} />
+            <RoutePlanner 
+              onRouteCalculated={setCurrentRoute} 
+              obstructions={obstructions} 
+            />
           </aside>
 
           <section 
