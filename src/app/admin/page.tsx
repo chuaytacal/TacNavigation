@@ -9,14 +9,13 @@ import { CommentViewer } from '@/components/admin/comment-viewer';
 import { RouteManagementTable } from '@/components/admin/route-management-table';
 import { getObstructions as fetchObstructions, getComments as fetchComments, getRoutes, toggleRouteStatusAction, addObstructionAction, removeObstructionAction } from '@/lib/actions';
 import type { Obstruction, Comment, Route, GeoCoordinates, AddObstructionData } from '@/lib/types';
-import { Loader2, MapPin, AlertCircle, PlusCircle, MinusCircle, Ban, Search } from 'lucide-react';
+import { Loader2, MapPin, AlertCircle, PlusCircle, MinusCircle, Ban, Search, Waypoints } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 const TACNA_CENTER: GeoCoordinates = { lat: -18.0146, lng: -70.2534 }; 
 
@@ -39,19 +38,13 @@ export default function AdminPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
 
-  const [startAddress, setStartAddress] = useState('');
-  const [endAddress, setEndAddress] = useState('');
-  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [startLat, setStartLat] = useState('');
+  const [startLng, setStartLng] = useState('');
+  const [endLat, setEndLat] = useState('');
+  const [endLng, setEndLng] = useState('');
+  const [isProcessingCoords, setIsProcessingCoords] = useState(false);
 
   const { toast } = useToast();
-  const geocodingLibrary = useMapsLibrary('geocoding');
-  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
-
-  useEffect(() => {
-    if (geocodingLibrary) {
-      setGeocoder(new geocodingLibrary.Geocoder());
-    }
-  }, [geocodingLibrary]);
 
   const loadAllData = useCallback(async () => {
     setIsLoadingRoutes(true);
@@ -114,7 +107,7 @@ export default function AdminPage() {
     }
   };
   
-  const handleStartSegmentCreation = () => {
+  const handleStartSegmentCreationByMap = () => {
     setSegmentCreationMode("pickingStart");
     setSelectedCoordsForNewObstruction(null);
     setSelectedEndCoordsForNewObstruction(null);
@@ -122,52 +115,37 @@ export default function AdminPage() {
     toast({title: "Define Segment", description: "Click on the map for the START point."});
   };
 
-  const handleDefineSegmentByAddress = async () => {
-    if (!geocoder) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Servicio de geocodificación no está listo.' });
+  const handleDefineSegmentByCoordinates = async () => {
+    const sLat = parseFloat(startLat);
+    const sLng = parseFloat(startLng);
+    const eLat = parseFloat(endLat);
+    const eLng = parseFloat(endLng);
+
+    if (isNaN(sLat) || isNaN(sLng) || isNaN(eLat) || isNaN(eLng)) {
+      toast({ variant: 'destructive', title: 'Coordenadas Inválidas', description: 'Por favor ingrese números válidos para latitud y longitud.' });
       return;
     }
-    if (!startAddress || !endAddress) {
-      toast({ variant: 'destructive', title: 'Faltan Direcciones', description: 'Por favor ingrese ambas direcciones de inicio y fin.' });
-      return;
+    // Basic validation for lat/lng ranges
+    if (sLat < -90 || sLat > 90 || eLat < -90 || eLat > 90 || sLng < -180 || sLng > 180 || eLng < -180 || eLng > 180) {
+        toast({ variant: 'destructive', title: 'Coordenadas Fuera de Rango', description: 'Latitud debe estar entre -90 y 90, Longitud entre -180 y 180.' });
+        return;
     }
 
-    setIsGeocoding(true);
+    setIsProcessingCoords(true);
     clearSelectedObstructionCoords(); // Clear any previous map selections
 
-    try {
-      const geocodeAddress = async (address: string): Promise<GeoCoordinates | null> => {
-        const response = await geocoder.geocode({ address, componentRestrictions: { country: 'PE' } }); // Restrict to Peru for better accuracy
-        if (response.results[0] && response.results[0].geometry) {
-          const location = response.results[0].geometry.location;
-          return { lat: location.lat(), lng: location.lng() };
-        }
-        return null;
-      };
-
-      const [startCoords, endCoords] = await Promise.all([
-        geocodeAddress(startAddress + ", Tacna, Peru"), // Add city/country context
-        geocodeAddress(endAddress + ", Tacna, Peru")
-      ]);
-
-      if (startCoords && endCoords) {
-        setSelectedCoordsForNewObstruction(startCoords);
-        setSelectedEndCoordsForNewObstruction(endCoords);
-        setSegmentCreationMode("idle"); // Ensure editor opens for segment directly
-        toast({ title: 'Direcciones Geocodificadas', description: 'Coordenadas obtenidas. Complete los detalles de la obstrucción.' });
-        // ObstructionEditor dialog will open via its useEffect now
-      } else {
-        let errorMsg = '';
-        if (!startCoords) errorMsg += 'No se pudo geocodificar la dirección de inicio. ';
-        if (!endCoords) errorMsg += 'No se pudo geocodificar la dirección de fin.';
-        toast({ variant: 'destructive', title: 'Error de Geocodificación', description: errorMsg.trim() });
-      }
-    } catch (error) {
-      console.error("Geocoding error:", error);
-      toast({ variant: 'destructive', title: 'Error de Geocodificación', description: 'Ocurrió un error al procesar las direcciones.' });
-    } finally {
-      setIsGeocoding(false);
-    }
+    setSelectedCoordsForNewObstruction({ lat: sLat, lng: sLng });
+    setSelectedEndCoordsForNewObstruction({ lat: eLat, lng: eLng });
+    setSegmentCreationMode("idle"); // Ensure editor opens for segment directly
+    toast({ title: 'Coordenadas Ingresadas', description: 'Coordenadas listas. Complete los detalles de la obstrucción.' });
+    
+    // Clear input fields
+    setStartLat('');
+    setStartLng('');
+    setEndLat('');
+    setEndLng('');
+    setIsProcessingCoords(false);
+    // ObstructionEditor dialog will open via its useEffect now
   };
 
 
@@ -219,8 +197,9 @@ export default function AdminPage() {
           setActiveTab(value as AdminPanelTab);
           if (value !== 'obstructions') {
             clearSelectedObstructionCoords(); 
-            setStartAddress(''); 
-            setEndAddress('');
+            setStartLat(''); setStartLng(''); setEndLat(''); setEndLng('');
+          } else {
+            setMapInstruction("Click on the map to mark a new point obstruction, or start defining a segment by map clicks, or use coordinate input.");
           }
         }} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-6">
@@ -242,7 +221,7 @@ export default function AdminPage() {
               <CardHeader>
                 <CardTitle>Mapa de Administración de Obstrucciones</CardTitle>
                 <CardDescription>
-                  {mapInstruction || "Click on the map to mark a new point obstruction, or start defining a segment."}
+                  {mapInstruction || "Click on the map to mark a new point obstruction, define a segment by map clicks, or use coordinate input below."}
                 </CardDescription>
                  {segmentCreationMode !== "idle" && (
                     <Button variant="outline" size="sm" onClick={clearSelectedObstructionCoords} className="mt-2">
@@ -276,7 +255,7 @@ export default function AdminPage() {
                   <Card className="p-4">
                     <h3 className="text-lg font-semibold mb-2">Definir Segmento por Mapa</h3>
                      <Button 
-                        onClick={handleStartSegmentCreation} 
+                        onClick={handleStartSegmentCreationByMap} 
                         className="w-full" 
                         variant="outline"
                         disabled={segmentCreationMode !== "idle"}
@@ -286,35 +265,63 @@ export default function AdminPage() {
                   </Card>
                   
                   <Card className="p-4">
-                    <h3 className="text-lg font-semibold mb-3">Definir Segmento por Direcciones</h3>
+                    <h3 className="text-lg font-semibold mb-3">Definir Segmento por Coordenadas</h3>
                     <div className="space-y-2">
                       <div>
-                        <Label htmlFor="startAddress">Dirección de Inicio</Label>
+                        <Label htmlFor="startLat">Latitud Inicio</Label>
                         <Input 
-                          id="startAddress" 
-                          placeholder="Ej: Av. Bolognesi 123" 
-                          value={startAddress} 
-                          onChange={(e) => setStartAddress(e.target.value)} 
-                          disabled={isGeocoding}
+                          id="startLat" 
+                          type="number"
+                          step="any"
+                          placeholder="Ej: -18.0146" 
+                          value={startLat} 
+                          onChange={(e) => setStartLat(e.target.value)} 
+                          disabled={isProcessingCoords}
+                        />
+                      </div>
+                       <div>
+                        <Label htmlFor="startLng">Longitud Inicio</Label>
+                        <Input 
+                          id="startLng" 
+                          type="number"
+                          step="any"
+                          placeholder="Ej: -70.2534" 
+                          value={startLng} 
+                          onChange={(e) => setStartLng(e.target.value)} 
+                          disabled={isProcessingCoords}
                         />
                       </div>
                       <div>
-                        <Label htmlFor="endAddress">Dirección de Fin</Label>
+                        <Label htmlFor="endLat">Latitud Fin</Label>
                         <Input 
-                          id="endAddress" 
-                          placeholder="Ej: Calle San Martin 456" 
-                          value={endAddress} 
-                          onChange={(e) => setEndAddress(e.target.value)} 
-                          disabled={isGeocoding}
+                          id="endLat" 
+                          type="number"
+                          step="any"
+                          placeholder="Ej: -18.0135" 
+                          value={endLat} 
+                          onChange={(e) => setEndLat(e.target.value)} 
+                          disabled={isProcessingCoords}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="endLng">Longitud Fin</Label>
+                        <Input 
+                          id="endLng" 
+                          type="number"
+                          step="any"
+                          placeholder="Ej: -70.2520" 
+                          value={endLng} 
+                          onChange={(e) => setEndLng(e.target.value)} 
+                          disabled={isProcessingCoords}
                         />
                       </div>
                        <Button 
-                        onClick={handleDefineSegmentByAddress} 
+                        onClick={handleDefineSegmentByCoordinates} 
                         className="w-full"
-                        disabled={isGeocoding || !startAddress || !endAddress || segmentCreationMode !== 'idle'}
+                        disabled={isProcessingCoords || !startLat || !startLng || !endLat || !endLng || segmentCreationMode !== 'idle'}
                       >
-                        {isGeocoding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                        Obtener Coordenadas y Definir
+                        {isProcessingCoords ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Waypoints className="mr-2 h-4 w-4" />}
+                        Definir por Coordenadas
                       </Button>
                     </div>
                   </Card>
@@ -343,3 +350,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
