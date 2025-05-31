@@ -1,7 +1,8 @@
 
 'use client';
 
-import { Map, AdvancedMarker, Pin, InfoWindow, useMap, MapControl, ControlPosition, Polyline } from '@vis.gl/react-google-maps';
+import { Map, AdvancedMarker, Pin, InfoWindow, useMap, MapControl, ControlPosition } from '@vis.gl/react-google-maps';
+// Polyline import removed as it's causing issues. We'll draw it manually.
 import type { GeoCoordinates, Obstruction } from '@/lib/types';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Construction, TrafficCone, CalendarX2, AlertTriangle, X, MapPin, Minus } from 'lucide-react'; // Added Minus for segment points
@@ -20,7 +21,7 @@ interface MapComponentProps {
 
 const obstructionIcons: Record<Obstruction['type'], React.ReactNode> = {
   construction: <Construction className="h-5 w-5 text-yellow-600" />,
-  closure: <TrafficCone className="h-5 w-5 text-red-600" />, // Icon for point closure
+  closure: <TrafficCone className="h-5 w-5 text-red-600" />,
   event: <CalendarX2 className="h-5 w-5 text-blue-600" />,
   accident: <AlertTriangle className="h-5 w-5 text-orange-600" />,
   other: <MapPin className="h-5 w-5 text-gray-600" />,
@@ -33,6 +34,46 @@ const obstructionPinColors: Record<Obstruction['type'], { background: string; gl
   accident: { background: '#F97316', glyphColor: '#FFFFFF', borderColor: '#C2410C' },
   other: { background: '#6B7280', glyphColor: '#FFFFFF', borderColor: '#4B5563' },
 };
+
+// Helper component to draw polylines natively using Google Maps API
+const NativeObstructionPolyline: React.FC<{
+  path: google.maps.LatLngLiteral[];
+  strokeColor?: string;
+  strokeOpacity?: number;
+  strokeWeight?: number;
+  onClick?: () => void;
+}> = ({ path, strokeColor, strokeOpacity, strokeWeight, onClick }) => {
+  const map = useMap();
+  const [polyline, setPolyline] = useState<google.maps.Polyline | null>(null);
+
+  useEffect(() => {
+    if (!map) return;
+
+    // Create new polyline instance
+    const newPolyline = new google.maps.Polyline({
+      path,
+      strokeColor,
+      strokeOpacity,
+      strokeWeight,
+      map, // Add to map
+    });
+
+    if (onClick) {
+      newPolyline.addListener('click', onClick);
+    }
+
+    setPolyline(newPolyline);
+
+    // Cleanup on unmount or if props change causing re-render
+    return () => {
+      newPolyline.setMap(null);
+    };
+  // Re-create polyline if map or path/style props change
+  }, [map, path, strokeColor, strokeOpacity, strokeWeight, onClick]);
+
+  return null; // This component does not render any React DOM elements itself
+};
+
 
 function RoutePolylineDisplay({ route }: { route: google.maps.DirectionsResult }) {
   const mapInstance = useMap();
@@ -63,7 +104,8 @@ function RoutePolylineDisplay({ route }: { route: google.maps.DirectionsResult }
     if (directionsRenderer && route) {
       directionsRenderer.setDirections(route);
     } else if (directionsRenderer) {
-      directionsRenderer.setDirections(undefined);
+      // Clear route if `route` is null
+      directionsRenderer.setDirections(undefined); 
     }
   }, [route, directionsRenderer]);
 
@@ -81,7 +123,7 @@ export function MapComponent({
   children,
 }: MapComponentProps) {
   const [selectedObstruction, setSelectedObstruction] = useState<Obstruction | null>(null);
-  const mapInstance = useMap();
+  const mapInstance = useMap(); // Get map instance for NativeObstructionPolyline
 
   const handleMapClick = useCallback((event: google.maps.MapMouseEvent) => {
     if (onMapClick && event.latLng && interactive) {
@@ -120,7 +162,7 @@ export function MapComponent({
           if (obstruction.type === 'closure' && obstruction.endCoordinates) {
             return (
               <React.Fragment key={obstruction.id}>
-                <Polyline
+                <NativeObstructionPolyline
                   path={[obstruction.coordinates, obstruction.endCoordinates]}
                   strokeColor="#EF4444" // Red for closure
                   strokeOpacity={0.8}
@@ -157,13 +199,14 @@ export function MapComponent({
         {selectedObstruction && (
           <InfoWindow
             position={selectedObstruction.endCoordinates ?
-              {
+              { // For segments, position InfoWindow in the middle.
                 lat: (selectedObstruction.coordinates.lat + selectedObstruction.endCoordinates.lat) / 2,
                 lng: (selectedObstruction.coordinates.lng + selectedObstruction.endCoordinates.lng) / 2
               } :
-              selectedObstruction.coordinates
+              selectedObstruction.coordinates // For points, position at the point.
             }
             onCloseClick={() => setSelectedObstruction(null)}
+            // Adjust pixelOffset for segments vs points if needed, default for InfoWindow usually handles this.
             pixelOffset={selectedObstruction.endCoordinates ? new google.maps.Size(0, -10) : new google.maps.Size(0, -40)}
           >
             <div className="p-2 max-w-xs">
