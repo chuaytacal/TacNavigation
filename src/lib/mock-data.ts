@@ -1,3 +1,4 @@
+
 import type { Obstruction, Comment, Route } from './types';
 
 export const initialObstructions: Obstruction[] = [
@@ -46,7 +47,7 @@ export const initialRoutes: Route[] = [
     id: 'R002',
     name: 'Ruta B - Circunvalación',
     pathDescription: 'Terminal Terrestre - Av. Leguia - Hospital Regional - Cono Sur',
-    status: 'open',
+    status: 'congested',
   },
   {
     id: 'R003',
@@ -54,10 +55,16 @@ export const initialRoutes: Route[] = [
     pathDescription: 'Ciudad Nueva - Av. Internacional - Aeropuerto - Alto de la Alianza',
     status: 'blocked',
   },
-    {
+  {
     id: 'R004',
     name: 'Ruta D - Playas',
     pathDescription: 'Centro - Boca del Río (Solo Verano)',
     status: 'open',
+  },
+  {
+    id: 'R005',
+    name: 'Ruta E - Alimentadora Oeste',
+    pathDescription: 'Para Chico - Av. Collpa - Gregorio Albarracín',
+    status: 'congested',
   },
 ];

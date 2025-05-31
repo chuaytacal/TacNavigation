@@ -1,3 +1,4 @@
+
 export interface GeoCoordinates {
   lat: number;
   lng: number;
@@ -29,7 +30,7 @@ export interface CommentFormData {
   longitude?: number;
 }
 
-export type RouteStatus = 'open' | 'blocked';
+export type RouteStatus = 'open' | 'blocked' | 'congested';
 
 export interface Route {
   id: string;

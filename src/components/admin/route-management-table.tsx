@@ -5,12 +5,12 @@ import type { Route } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle, Route as RouteIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Route as RouteIcon, FastForward } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 interface RouteManagementTableProps {
   routes: Route[];
-  onToggleRouteStatus: (routeId: string) => Promise<void>;
+  onToggleRouteStatus: (routeId: string) => Promise<void>; // Currently toggles between open/blocked
   isLoading: boolean;
 }
 
@@ -23,6 +23,21 @@ export function RouteManagementTable({ routes, onToggleRouteStatus, isLoading }:
     return <p className="text-muted-foreground">No hay rutas para administrar.</p>;
   }
 
+  const getStatusBadge = (status: Route['status']) => {
+    switch (status) {
+      case 'open':
+        return <Badge variant="default" className="flex items-center gap-1 justify-center"><CheckCircle className="h-3 w-3" />Abierta</Badge>;
+      case 'blocked':
+        return <Badge variant="destructive" className="flex items-center gap-1 justify-center"><AlertTriangle className="h-3 w-3" />Bloqueada</Badge>;
+      case 'congested':
+        // For admin, 'congested' is shown, but not toggled by the simple switch.
+        // This might need a more complex status management UI if admin should set 'congested'.
+        return <Badge variant="secondary" className="flex items-center gap-1 justify-center text-orange-600 border-orange-500/50"><FastForward className="h-3 w-3" />Congestionada</Badge>;
+      default:
+        return <Badge variant="outline">Desconocido</Badge>;
+    }
+  };
+
   return (
     <Card className="w-full shadow-xl">
       <CardHeader>
@@ -30,7 +45,7 @@ export function RouteManagementTable({ routes, onToggleRouteStatus, isLoading }:
           <RouteIcon className="mr-2 h-6 w-6 text-primary" /> Administrar Rutas de Buses
         </CardTitle>
         <CardDescription>
-          Gestione el estado de las rutas de buses. Los cambios se reflejarán para los usuarios.
+          Gestione el estado de las rutas de buses (Abierta/Bloqueada). El estado 'Congestionada' es informativo.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -47,27 +62,26 @@ export function RouteManagementTable({ routes, onToggleRouteStatus, isLoading }:
           </TableHeader>
           <TableBody>
             {routes.map((route) => (
-              <TableRow key={route.id} className={route.status === 'blocked' ? 'bg-destructive/10' : ''}>
+              <TableRow key={route.id} className={route.status === 'blocked' ? 'bg-destructive/10' : route.status === 'congested' ? 'bg-yellow-500/10' : ''}>
                 <TableCell className="font-medium">{route.id}</TableCell>
                 <TableCell>{route.name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{route.pathDescription}</TableCell>
                 <TableCell className="text-center">
-                  <Badge variant={route.status === 'blocked' ? 'destructive' : 'default'} className="flex items-center gap-1 justify-center">
-                    {route.status === 'blocked' ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
-                    {route.status === 'blocked' ? 'Bloqueada' : 'Abierta'}
-                  </Badge>
+                  {getStatusBadge(route.status)}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end space-x-2">
+                     {/* Switch only toggles open/blocked. Congested status is managed via data or future complex logic. */}
                     <span className="text-sm text-muted-foreground">
-                      {route.status === 'open' ? 'Bloquear' : 'Abrir'}
+                      {route.status === 'open' || route.status === 'congested' ? 'Bloquear' : 'Abrir'}
                     </span>
                     <Switch
                       id={`status-${route.id}`}
-                      checked={route.status === 'blocked'}
-                      onCheckedChange={() => onToggleRouteStatus(route.id)}
-                      aria-label={`Cambiar estado de ${route.name}`}
+                      checked={route.status === 'blocked'} 
+                      onCheckedChange={() => onToggleRouteStatus(route.id)} // This action only knows open/blocked
+                      aria-label={`Cambiar estado de ${route.name} (abierta/bloqueada)`}
                       className="data-[state=checked]:bg-accent data-[state=unchecked]:bg-primary/70"
+                      disabled={route.status === 'congested'} // Disable switch if congested, as it's not part of simple toggle
                     />
                   </div>
                 </TableCell>
