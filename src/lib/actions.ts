@@ -1,11 +1,13 @@
+
 'use server';
 
-import type { Obstruction, Comment, ObstructionType, GeoCoordinates, CommentFormData } from './types';
-import { initialObstructions, initialComments } from './mock-data';
+import type { Obstruction, Comment, ObstructionType, GeoCoordinates, CommentFormData, Route, RouteStatus } from './types';
+import { initialObstructions, initialComments, initialRoutes } from './mock-data';
 
 // Simulate a database. In a real app, use a proper database.
 let obstructionsStore: Obstruction[] = [...initialObstructions];
 let commentsStore: Comment[] = [...initialComments];
+let routesStore: Route[] = [...initialRoutes];
 
 export async function getObstructions(): Promise<Obstruction[]> {
   return JSON.parse(JSON.stringify(obstructionsStore)); // Return a copy
@@ -50,4 +52,18 @@ export async function submitCommentAction(formData: CommentFormData): Promise<Co
   };
   commentsStore.unshift(newComment); // Add to the beginning of the list
   return JSON.parse(JSON.stringify(newComment));
+}
+
+// Actions for Routes
+export async function getRoutes(): Promise<Route[]> {
+  return JSON.parse(JSON.stringify(routesStore)); // Return a copy
+}
+
+export async function toggleRouteStatusAction(routeId: string): Promise<Route | null> {
+  const routeIndex = routesStore.findIndex(route => route.id === routeId);
+  if (routeIndex > -1) {
+    routesStore[routeIndex].status = routesStore[routeIndex].status === 'open' ? 'blocked' : 'open';
+    return JSON.parse(JSON.stringify(routesStore[routeIndex]));
+  }
+  return null;
 }

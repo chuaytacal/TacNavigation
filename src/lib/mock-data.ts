@@ -1,4 +1,4 @@
-import type { Obstruction, Comment } from './types';
+import type { Obstruction, Comment, Route } from './types';
 
 export const initialObstructions: Obstruction[] = [
   {
@@ -32,5 +32,32 @@ export const initialComments: Comment[] = [
     // imageUrl: 'https://placehold.co/300x200.png', // Example placeholder
     submittedAt: new Date(Date.now() - 3600000 * 1).toISOString(), // 1 hour ago
     coordinates: { lat: -18.020, lng: -70.250 }
+  },
+];
+
+export const initialRoutes: Route[] = [
+  {
+    id: 'R001',
+    name: 'Ruta A - Expreso Centro',
+    pathDescription: 'Plaza de Armas - Av. Bolognesi - Mercado Central - Ovalo Cusco',
+    status: 'open',
+  },
+  {
+    id: 'R002',
+    name: 'Ruta B - Circunvalación',
+    pathDescription: 'Terminal Terrestre - Av. Leguia - Hospital Regional - Cono Sur',
+    status: 'open',
+  },
+  {
+    id: 'R003',
+    name: 'Ruta C - Norte Directo',
+    pathDescription: 'Ciudad Nueva - Av. Internacional - Aeropuerto - Alto de la Alianza',
+    status: 'blocked',
+  },
+    {
+    id: 'R004',
+    name: 'Ruta D - Playas',
+    pathDescription: 'Centro - Boca del Río (Solo Verano)',
+    status: 'open',
   },
 ];

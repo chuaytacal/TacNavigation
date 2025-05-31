@@ -1,10 +1,11 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AppProviders } from '@/components/layout/app-providers'; // Will create this
 
 export const metadata: Metadata = {
-  title: 'Tacna Transit Flow',
+  title: 'TacNavigator',
   description: 'Ayudando a resolver la congestión vehicular en Tacna.',
 };
 
