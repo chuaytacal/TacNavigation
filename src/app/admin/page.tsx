@@ -9,13 +9,13 @@ import { CommentViewer } from '@/components/admin/comment-viewer';
 import { RouteManagementTable } from '@/components/admin/route-management-table';
 import { getObstructions as fetchObstructions, getComments as fetchComments, getRoutes, toggleRouteStatusAction, addObstructionAction, removeObstructionAction } from '@/lib/actions';
 import type { Obstruction, Comment, Route, GeoCoordinates, AddObstructionData } from '@/lib/types';
-import { Loader2, MapPin, AlertCircle, PlusCircle } from 'lucide-react';
+import { Loader2, MapPin, AlertCircle, PlusCircle, MinusCircle, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-const TACNA_CENTER: GeoCoordinates = { lat: -18.0146, lng: -70.2534 }; // Tacna center
+const TACNA_CENTER: GeoCoordinates = { lat: -18.0146, lng: -70.2534 }; 
 
 type AdminPanelTab = "routes" | "obstructions" | "comments";
 type SegmentCreationMode = "idle" | "pickingStart" | "pickingEnd";
@@ -23,11 +23,9 @@ type SegmentCreationMode = "idle" | "pickingStart" | "pickingEnd";
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminPanelTab>("routes");
   
-  // Routes Management
   const [routes, setRoutes] = useState<Route[]>([]);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(true);
 
-  // Obstructions Management
   const [obstructions, setObstructions] = useState<Obstruction[]>([]);
   const [isLoadingObstructions, setIsLoadingObstructions] = useState(true);
   const [selectedCoordsForNewObstruction, setSelectedCoordsForNewObstruction] = useState<GeoCoordinates | null>(null);
@@ -35,8 +33,6 @@ export default function AdminPage() {
   const [segmentCreationMode, setSegmentCreationMode] = useState<SegmentCreationMode>("idle");
   const [mapInstruction, setMapInstruction] = useState<string | null>("Click on the map to mark a new point obstruction, or start defining a segment.");
 
-
-  // Comments Management
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
 
@@ -69,7 +65,6 @@ export default function AdminPage() {
     loadAllData();
   }, [loadAllData]);
 
-  // Route Management Handlers
   const handleToggleRouteStatus = async (routeId: string) => {
     const originalRoutes = [...routes];
     setRoutes(prev => prev.map(r => r.id === routeId ? { ...r, status: r.status === 'open' ? 'blocked' : 'open' } : r));
@@ -77,32 +72,33 @@ export default function AdminPage() {
       const updatedRoute = await toggleRouteStatusAction(routeId);
       if (!updatedRoute) throw new Error("Failed to update route on server.");
       toast({ title: 'Estado de Ruta Actualizado', description: `La ruta "${updatedRoute.name}" ahora está ${updatedRoute.status === 'open' ? 'abierta' : 'bloqueada'}.` });
-       await loadAllData(); // Reload to ensure consistency
+       await loadAllData(); 
     } catch (error) {
       setRoutes(originalRoutes);
       toast({ variant: 'destructive', title: 'Error al Actualizar Ruta', description: String(error) });
     }
   };
 
-  // Obstruction Management Handlers
   const handleMapClick = (coords: GeoCoordinates) => {
     if (activeTab !== 'obstructions') return;
 
     if (segmentCreationMode === "pickingStart") {
       setSelectedCoordsForNewObstruction(coords);
-      setSelectedEndCoordsForNewObstruction(null); // Clear any previous end coord
+      // Do NOT clear end coords here, as this is the first point
       setSegmentCreationMode("pickingEnd");
       setMapInstruction("Segment Start selected. Click map again to select End point for the blockage.");
     } else if (segmentCreationMode === "pickingEnd") {
       setSelectedEndCoordsForNewObstruction(coords);
-      setSegmentCreationMode("idle"); // Reset mode, dialog will open via useEffect in ObstructionEditor or similar logic
-      setMapInstruction("Segment End selected. Fill obstruction details.");
-      // ObstructionEditor dialog should open now as selectedCoordsForNewObstruction and selectedEndCoordsForNewObstruction are set
-    } else { // Default: adding point obstruction or initiating segment selection
+      setSegmentCreationMode("idle"); 
+      setMapInstruction("Segment End selected. Fill obstruction details below.");
+      // ObstructionEditor dialog will open via its own useEffect now that both points are set
+    } else { 
+      // Default: adding a point obstruction (not in segment creation mode)
       setSelectedCoordsForNewObstruction(coords);
-      setSelectedEndCoordsForNewObstruction(null);
-      setMapInstruction("Point selected for obstruction. Fill details or start segment.");
-      // This will trigger ObstructionEditor to open for a point obstruction
+      setSelectedEndCoordsForNewObstruction(null); // Ensure no end coords for point obstruction
+      setSegmentCreationMode("idle"); // Ensure mode is idle for point
+      setMapInstruction("Point selected for obstruction. Fill details below.");
+      // ObstructionEditor dialog will open via its useEffect for point obstruction
     }
   };
   
@@ -110,8 +106,8 @@ export default function AdminPage() {
     setSegmentCreationMode("pickingStart");
     setSelectedCoordsForNewObstruction(null);
     setSelectedEndCoordsForNewObstruction(null);
-    setMapInstruction("Click on the map to select the Start point of the blocked segment.");
-    toast({title: "Define Segment", description: "Click on the map for the start point."});
+    setMapInstruction("Click on the map to select the START point of the blocked segment.");
+    toast({title: "Define Segment", description: "Click on the map for the START point."});
   };
 
   const handleObstructionAdded = async (obstructionData: AddObstructionData) => {
@@ -119,7 +115,7 @@ export default function AdminPage() {
       const newObstruction = await addObstructionAction(obstructionData);
       setObstructions(prev => [newObstruction, ...prev].sort((a,b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()));
       toast({ title: 'Obstrucción Añadida', description: `"${newObstruction.title}" ha sido marcada.` });
-      clearSelectedObstructionCoords();
+      clearSelectedObstructionCoords(); // This also resets segmentCreationMode to "idle"
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error al Añadir Obstrucción', description: String(error) });
     }
@@ -142,7 +138,6 @@ export default function AdminPage() {
     setMapInstruction("Click on the map to mark a new point obstruction, or start defining a segment.");
   };
 
-
   if (isLoadingRoutes || isLoadingObstructions || isLoadingComments) {
     return (
       <div className="flex flex-col min-h-screen bg-background">
@@ -159,7 +154,10 @@ export default function AdminPage() {
     <div className="flex flex-col min-h-screen bg-background">
       <AppHeader />
       <main className="flex-grow p-4 md:p-8">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminPanelTab)} className="w-full">
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value as AdminPanelTab);
+          if (value !== 'obstructions') clearSelectedObstructionCoords(); // Reset if switching away from obstructions tab
+        }} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="routes">Gestión de Rutas</TabsTrigger>
             <TabsTrigger value="obstructions">Gestión de Obstrucciones</TabsTrigger>
@@ -183,7 +181,7 @@ export default function AdminPage() {
                 </CardDescription>
                  {segmentCreationMode !== "idle" && (
                     <Button variant="outline" size="sm" onClick={clearSelectedObstructionCoords} className="mt-2">
-                        Cancelar Creación de Segmento
+                        <Ban className="mr-2 h-4 w-4" /> Cancelar Creación
                     </Button>
                 )}
               </CardHeader>
@@ -195,23 +193,28 @@ export default function AdminPage() {
                       initialZoom={13}
                       obstructionsToDisplay={obstructions}
                       onMapClick={handleMapClick}
-                      interactive={true}
+                      interactive={true} // Map should always be interactive for admin
                     />
                   </Suspense>
                   {segmentCreationMode === 'pickingStart' && (
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground p-2 rounded shadow-lg text-sm z-10">
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground p-2 rounded shadow-lg text-sm z-10 pointer-events-none">
                         <MapPin className="inline mr-1 h-4 w-4"/> Seleccione el INICIO del bloqueo.
                     </div>
                   )}
                   {segmentCreationMode === 'pickingEnd' && (
-                     <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-accent text-accent-foreground p-2 rounded shadow-lg text-sm z-10">
+                     <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-accent text-accent-foreground p-2 rounded shadow-lg text-sm z-10 pointer-events-none">
                         <MapPin className="inline mr-1 h-4 w-4"/> Seleccione el FIN del bloqueo.
                     </div>
                   )}
                 </div>
                 <div className="md:col-span-1 space-y-4">
-                  <Button onClick={handleStartSegmentCreation} className="w-full" variant="outline">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Empezar a Definir Segmento Bloqueado
+                  <Button 
+                    onClick={handleStartSegmentCreation} 
+                    className="w-full" 
+                    variant="outline"
+                    disabled={segmentCreationMode !== "idle"} // Disable if already in a creation mode
+                  >
+                    <MinusCircle className="mr-2 h-4 w-4" /> Empezar a Definir Segmento Bloqueado
                   </Button>
                   <ObstructionEditor
                     currentObstructions={obstructions}
@@ -220,7 +223,7 @@ export default function AdminPage() {
                     selectedCoordsForNewObstruction={selectedCoordsForNewObstruction}
                     selectedEndCoordsForNewObstruction={selectedEndCoordsForNewObstruction}
                     clearSelectedCoords={clearSelectedObstructionCoords}
-                    isCreatingSegment={segmentCreationMode !== 'idle'}
+                    isCreatingSegment={segmentCreationMode === "pickingStart" || segmentCreationMode === "pickingEnd" || (selectedCoordsForNewObstruction !== null && selectedEndCoordsForNewObstruction !== null)}
                   />
                 </div>
               </CardContent>
@@ -237,3 +240,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+    

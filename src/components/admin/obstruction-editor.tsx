@@ -20,7 +20,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const obstructionTypes: ObstructionType[] = ['construction', 'closure', 'event', 'accident', 'other'];
 
-// Schema for the form itself
 const obstructionFormSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters.").max(100),
   description: z.string().min(10, "Description must be at least 10 characters.").max(500),
@@ -31,12 +30,12 @@ type ObstructionFormValues = z.infer<typeof obstructionFormSchema>;
 
 interface ObstructionEditorProps {
   currentObstructions: Obstruction[];
-  onObstructionAdded: (data: AddObstructionData) => void; // Changed to pass AddObstructionData
+  onObstructionAdded: (data: AddObstructionData) => void;
   onObstructionRemoved: (id: string) => void;
-  selectedCoordsForNewObstruction: GeoCoordinates | null; // This is the START point
-  selectedEndCoordsForNewObstruction?: GeoCoordinates | null; // Optional END point for segments
+  selectedCoordsForNewObstruction: GeoCoordinates | null;
+  selectedEndCoordsForNewObstruction?: GeoCoordinates | null;
   clearSelectedCoords: () => void;
-  isCreatingSegment: boolean; // To adjust dialog behavior/title
+  isCreatingSegment: boolean; 
 }
 
 export function ObstructionEditor({
@@ -57,28 +56,32 @@ export function ObstructionEditor({
     defaultValues: { title: '', description: '', type: undefined },
   });
 
-  // Effect to open dialog when start coordinates are selected
-  // and optionally when end coordinates for a segment are also selected.
   useEffect(() => {
-    if (selectedCoordsForNewObstruction) {
+    // Open dialog if:
+    // 1. Adding a point obstruction (not in segment mode, start coords selected)
+    // OR
+    // 2. Finalizing a segment obstruction (in segment mode, both start and end coords selected)
+    const shouldOpenForPoint = !isCreatingSegment && selectedCoordsForNewObstruction && !selectedEndCoordsForNewObstruction;
+    const shouldOpenForSegment = isCreatingSegment && selectedCoordsForNewObstruction && selectedEndCoordsForNewObstruction;
+
+    if (shouldOpenForPoint || shouldOpenForSegment) {
       setIsDialogOpen(true);
-      // If it's a segment and both points are now selected, default type to 'closure'
-      if (selectedEndCoordsForNewObstruction) {
-        form.reset({ type: 'closure', title: '', description: '' }); // Reset form with type closure
-      } else if (!isCreatingSegment) { // If it's a point obstruction (not in segment creation mode)
-         form.reset({ title: '', description: '', type: undefined }); // Reset for point
+      if (shouldOpenForSegment) {
+        form.reset({ type: 'closure', title: '', description: '' }); // Default for segments
+      } else { // Point obstruction
+        form.reset({ title: '', description: '', type: undefined });
       }
-      // if isCreatingSegment is true but no selectedEndCoords, form is reset by user action or previous flow.
-    } else {
-      setIsDialogOpen(false); // Close if no start coord
+    } else if (!selectedCoordsForNewObstruction && !selectedEndCoordsForNewObstruction) {
+      // Ensure dialog is closed if no coordinates are selected at all (e.g., after cancelling segment creation)
+      setIsDialogOpen(false);
     }
   }, [selectedCoordsForNewObstruction, selectedEndCoordsForNewObstruction, form, isCreatingSegment]);
 
-  // Reset form and clear all coords when dialog closes
+
   useEffect(() => {
     if (!isDialogOpen) {
       form.reset({ title: '', description: '', type: undefined });
-      // clearSelectedCoords(); // This is called by admin/page.tsx on successful add or cancel
+      // Parent calls clearSelectedCoords on successful add or explicit cancel from parent
     }
   }, [isDialogOpen, form]);
 
@@ -88,10 +91,11 @@ export function ObstructionEditor({
       toast({ variant: "destructive", title: "Error", description: "No start coordinates selected on the map." });
       return;
     }
-    // For 'closure' type, end coordinates are mandatory if it's intended as a segment.
-    // The parent component (admin/page.tsx) controls if selectedEndCoordsForNewObstruction is set.
+    
+    // For 'closure' type, if it's intended as a segment (both coords present), it's valid.
+    // If type is 'closure' AND isCreatingSegment is true BUT no endCoords, then it's an error.
     if (data.type === 'closure' && isCreatingSegment && !selectedEndCoordsForNewObstruction) {
-       toast({ variant: "destructive", title: "Error", description: "For a 'closure' segment, please select an end point on the map." });
+       toast({ variant: "destructive", title: "Error", description: "For a 'closure' segment, an end point must be selected on the map." });
        return;
     }
 
@@ -100,13 +104,15 @@ export function ObstructionEditor({
       const obstructionPayload: AddObstructionData = {
         ...data,
         coordinates: selectedCoordsForNewObstruction,
-        endCoordinates: data.type === 'closure' && selectedEndCoordsForNewObstruction ? selectedEndCoordsForNewObstruction : undefined,
+        // Only include endCoordinates if they are present and type is closure (or if it's a segment being created)
+        endCoordinates: (data.type === 'closure' && selectedEndCoordsForNewObstruction) || (isCreatingSegment && selectedEndCoordsForNewObstruction) 
+                        ? selectedEndCoordsForNewObstruction 
+                        : undefined,
       };
-      onObstructionAdded(obstructionPayload); // Parent handles the actual API call
-      // Toast is handled by parent onObstructionAdded
-      setIsDialogOpen(false); // Close dialog on success
-      clearSelectedCoords(); // Signal parent to clear coords
-    } catch (error) { // Should not happen if parent handles API, but as a fallback
+      onObstructionAdded(obstructionPayload); 
+      setIsDialogOpen(false); 
+      clearSelectedCoords(); 
+    } catch (error) { 
       toast({ variant: "destructive", title: "Failed to add obstruction", description: String(error) });
     } finally {
       setIsSubmitting(false);
@@ -114,13 +120,14 @@ export function ObstructionEditor({
   };
 
   const handleRemoveObstruction = async (id: string, title: string) => {
-    // Confirmation can be added here or in parent
-    onObstructionRemoved(id); // Parent handles API and toast
+    onObstructionRemoved(id); 
   };
   
   const handleDialogClose = () => {
     setIsDialogOpen(false);
-    clearSelectedCoords(); // Ensure coords are cleared when dialog is manually closed
+    // Important: Clear selected coordinates if dialog is closed manually,
+    // especially if it was for a segment that wasn't completed.
+    clearSelectedCoords(); 
   }
 
   return (
@@ -130,8 +137,10 @@ export function ObstructionEditor({
           <Edit3 className="mr-2 h-6 w-6 text-primary" /> Administrar Obstrucciones
         </CardTitle>
         <CardDescription>
-          {isCreatingSegment && !selectedEndCoordsForNewObstruction 
-            ? "Segment Started. Details will be filled after selecting end point." 
+          {isCreatingSegment && selectedCoordsForNewObstruction && !selectedEndCoordsForNewObstruction 
+            ? "Segment Started. Select end point on map. Details will be filled after selecting end point." 
+            : isCreatingSegment && !selectedCoordsForNewObstruction
+            ? "Start defining a segment by clicking its start point on the map."
             : "Define details for the selected point or segment. View existing below."}
         </CardDescription>
       </CardHeader>
@@ -175,8 +184,7 @@ export function ObstructionEditor({
                     <FormLabel>Tipo</FormLabel>
                     <Select 
                         onValueChange={field.onChange} 
-                        defaultValue={field.value}
-                        value={field.value} // ensure value is controlled
+                        value={field.value || ''} // Ensure value is controlled, default to empty string if undefined
                     >
                       <FormControl><SelectTrigger><SelectValue placeholder="Seleccione tipo" /></SelectTrigger></FormControl>
                       <SelectContent>
@@ -184,7 +192,7 @@ export function ObstructionEditor({
                       </SelectContent>
                     </Select>
                     <FormMessage />
-                     {field.value === 'closure' && !selectedEndCoordsForNewObstruction && isCreatingSegment && (
+                     {field.value === 'closure' && isCreatingSegment && !selectedEndCoordsForNewObstruction && (
                         <FormDescription className="text-accent">
                             Para 'Cierre de vía' como segmento, asegúrese de haber seleccionado un punto final en el mapa.
                         </FormDescription>
@@ -210,13 +218,13 @@ export function ObstructionEditor({
           <ScrollArea className="h-[250px] pr-3">
             <ul className="space-y-3">
               {currentObstructions.map(obs => (
-                <li key={obs.id} className="p-3 border rounded-md bg-card flex justify-between items-start hover:shadow-md transition-shadow">
+                <li key={obs.id} className={`p-3 border rounded-md bg-card flex justify-between items-start hover:shadow-md transition-shadow ${obs.type === 'closure' && obs.endCoordinates ? 'border-destructive/50' : ''}`}>
                   <div className="flex-1">
                     <p className="font-semibold text-sm">{obs.title}</p>
                     <p className="text-xs text-muted-foreground capitalize flex items-center">
-                      {obs.type === 'closure' && obs.endCoordinates ? 
+                      {(obs.type === 'closure' && obs.endCoordinates) ? 
                         <MinusCircle className="h-3 w-3 mr-1 text-destructive" /> : 
-                        <MapPin className="h-3 w-3 mr-1 text-primary" />}
+                        <MapPin className={`h-3 w-3 mr-1 ${obs.type === 'closure' ? 'text-destructive' : 'text-primary'}`} />}
                       {obs.type} - Añadido: {new Date(obs.addedAt).toLocaleDateString()}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -238,3 +246,5 @@ export function ObstructionEditor({
     </Card>
   );
 }
+
+    
