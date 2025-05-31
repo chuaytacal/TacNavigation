@@ -9,11 +9,14 @@ import { CommentViewer } from '@/components/admin/comment-viewer';
 import { RouteManagementTable } from '@/components/admin/route-management-table';
 import { getObstructions as fetchObstructions, getComments as fetchComments, getRoutes, toggleRouteStatusAction, addObstructionAction, removeObstructionAction } from '@/lib/actions';
 import type { Obstruction, Comment, Route, GeoCoordinates, AddObstructionData } from '@/lib/types';
-import { Loader2, MapPin, AlertCircle, PlusCircle, MinusCircle, Ban } from 'lucide-react';
+import { Loader2, MapPin, AlertCircle, PlusCircle, MinusCircle, Ban, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 const TACNA_CENTER: GeoCoordinates = { lat: -18.0146, lng: -70.2534 }; 
 
@@ -36,7 +39,19 @@ export default function AdminPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
 
+  const [startAddress, setStartAddress] = useState('');
+  const [endAddress, setEndAddress] = useState('');
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
   const { toast } = useToast();
+  const geocodingLibrary = useMapsLibrary('geocoding');
+  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
+
+  useEffect(() => {
+    if (geocodingLibrary) {
+      setGeocoder(new geocodingLibrary.Geocoder());
+    }
+  }, [geocodingLibrary]);
 
   const loadAllData = useCallback(async () => {
     setIsLoadingRoutes(true);
@@ -84,7 +99,6 @@ export default function AdminPage() {
 
     if (segmentCreationMode === "pickingStart") {
       setSelectedCoordsForNewObstruction(coords);
-      // Do NOT clear end coords here, as this is the first point
       setSegmentCreationMode("pickingEnd");
       setMapInstruction("Segment Start selected. Click map again to select End point for the blockage.");
     } else if (segmentCreationMode === "pickingEnd") {
@@ -93,12 +107,10 @@ export default function AdminPage() {
       setMapInstruction("Segment End selected. Fill obstruction details below.");
       // ObstructionEditor dialog will open via its own useEffect now that both points are set
     } else { 
-      // Default: adding a point obstruction (not in segment creation mode)
       setSelectedCoordsForNewObstruction(coords);
-      setSelectedEndCoordsForNewObstruction(null); // Ensure no end coords for point obstruction
-      setSegmentCreationMode("idle"); // Ensure mode is idle for point
+      setSelectedEndCoordsForNewObstruction(null); 
+      setSegmentCreationMode("idle"); 
       setMapInstruction("Point selected for obstruction. Fill details below.");
-      // ObstructionEditor dialog will open via its useEffect for point obstruction
     }
   };
   
@@ -110,12 +122,61 @@ export default function AdminPage() {
     toast({title: "Define Segment", description: "Click on the map for the START point."});
   };
 
+  const handleDefineSegmentByAddress = async () => {
+    if (!geocoder) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Servicio de geocodificación no está listo.' });
+      return;
+    }
+    if (!startAddress || !endAddress) {
+      toast({ variant: 'destructive', title: 'Faltan Direcciones', description: 'Por favor ingrese ambas direcciones de inicio y fin.' });
+      return;
+    }
+
+    setIsGeocoding(true);
+    clearSelectedObstructionCoords(); // Clear any previous map selections
+
+    try {
+      const geocodeAddress = async (address: string): Promise<GeoCoordinates | null> => {
+        const response = await geocoder.geocode({ address, componentRestrictions: { country: 'PE' } }); // Restrict to Peru for better accuracy
+        if (response.results[0] && response.results[0].geometry) {
+          const location = response.results[0].geometry.location;
+          return { lat: location.lat(), lng: location.lng() };
+        }
+        return null;
+      };
+
+      const [startCoords, endCoords] = await Promise.all([
+        geocodeAddress(startAddress + ", Tacna, Peru"), // Add city/country context
+        geocodeAddress(endAddress + ", Tacna, Peru")
+      ]);
+
+      if (startCoords && endCoords) {
+        setSelectedCoordsForNewObstruction(startCoords);
+        setSelectedEndCoordsForNewObstruction(endCoords);
+        setSegmentCreationMode("idle"); // Ensure editor opens for segment directly
+        toast({ title: 'Direcciones Geocodificadas', description: 'Coordenadas obtenidas. Complete los detalles de la obstrucción.' });
+        // ObstructionEditor dialog will open via its useEffect now
+      } else {
+        let errorMsg = '';
+        if (!startCoords) errorMsg += 'No se pudo geocodificar la dirección de inicio. ';
+        if (!endCoords) errorMsg += 'No se pudo geocodificar la dirección de fin.';
+        toast({ variant: 'destructive', title: 'Error de Geocodificación', description: errorMsg.trim() });
+      }
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      toast({ variant: 'destructive', title: 'Error de Geocodificación', description: 'Ocurrió un error al procesar las direcciones.' });
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+
   const handleObstructionAdded = async (obstructionData: AddObstructionData) => {
     try {
       const newObstruction = await addObstructionAction(obstructionData);
       setObstructions(prev => [newObstruction, ...prev].sort((a,b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()));
       toast({ title: 'Obstrucción Añadida', description: `"${newObstruction.title}" ha sido marcada.` });
-      clearSelectedObstructionCoords(); // This also resets segmentCreationMode to "idle"
+      clearSelectedObstructionCoords(); 
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error al Añadir Obstrucción', description: String(error) });
     }
@@ -156,7 +217,11 @@ export default function AdminPage() {
       <main className="flex-grow p-4 md:p-8">
         <Tabs value={activeTab} onValueChange={(value) => {
           setActiveTab(value as AdminPanelTab);
-          if (value !== 'obstructions') clearSelectedObstructionCoords(); // Reset if switching away from obstructions tab
+          if (value !== 'obstructions') {
+            clearSelectedObstructionCoords(); 
+            setStartAddress(''); 
+            setEndAddress('');
+          }
         }} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="routes">Gestión de Rutas</TabsTrigger>
@@ -181,7 +246,7 @@ export default function AdminPage() {
                 </CardDescription>
                  {segmentCreationMode !== "idle" && (
                     <Button variant="outline" size="sm" onClick={clearSelectedObstructionCoords} className="mt-2">
-                        <Ban className="mr-2 h-4 w-4" /> Cancelar Creación
+                        <Ban className="mr-2 h-4 w-4" /> Cancelar Creación por Mapa
                     </Button>
                 )}
               </CardHeader>
@@ -193,7 +258,7 @@ export default function AdminPage() {
                       initialZoom={13}
                       obstructionsToDisplay={obstructions}
                       onMapClick={handleMapClick}
-                      interactive={true} // Map should always be interactive for admin
+                      interactive={true} 
                     />
                   </Suspense>
                   {segmentCreationMode === 'pickingStart' && (
@@ -208,14 +273,52 @@ export default function AdminPage() {
                   )}
                 </div>
                 <div className="md:col-span-1 space-y-4">
-                  <Button 
-                    onClick={handleStartSegmentCreation} 
-                    className="w-full" 
-                    variant="outline"
-                    disabled={segmentCreationMode !== "idle"} // Disable if already in a creation mode
-                  >
-                    <MinusCircle className="mr-2 h-4 w-4" /> Empezar a Definir Segmento Bloqueado
-                  </Button>
+                  <Card className="p-4">
+                    <h3 className="text-lg font-semibold mb-2">Definir Segmento por Mapa</h3>
+                     <Button 
+                        onClick={handleStartSegmentCreation} 
+                        className="w-full" 
+                        variant="outline"
+                        disabled={segmentCreationMode !== "idle"}
+                      >
+                        <MinusCircle className="mr-2 h-4 w-4" /> Empezar Creación por Mapa
+                      </Button>
+                  </Card>
+                  
+                  <Card className="p-4">
+                    <h3 className="text-lg font-semibold mb-3">Definir Segmento por Direcciones</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <Label htmlFor="startAddress">Dirección de Inicio</Label>
+                        <Input 
+                          id="startAddress" 
+                          placeholder="Ej: Av. Bolognesi 123" 
+                          value={startAddress} 
+                          onChange={(e) => setStartAddress(e.target.value)} 
+                          disabled={isGeocoding}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="endAddress">Dirección de Fin</Label>
+                        <Input 
+                          id="endAddress" 
+                          placeholder="Ej: Calle San Martin 456" 
+                          value={endAddress} 
+                          onChange={(e) => setEndAddress(e.target.value)} 
+                          disabled={isGeocoding}
+                        />
+                      </div>
+                       <Button 
+                        onClick={handleDefineSegmentByAddress} 
+                        className="w-full"
+                        disabled={isGeocoding || !startAddress || !endAddress || segmentCreationMode !== 'idle'}
+                      >
+                        {isGeocoding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                        Obtener Coordenadas y Definir
+                      </Button>
+                    </div>
+                  </Card>
+                 
                   <ObstructionEditor
                     currentObstructions={obstructions}
                     onObstructionAdded={handleObstructionAdded}
@@ -223,7 +326,7 @@ export default function AdminPage() {
                     selectedCoordsForNewObstruction={selectedCoordsForNewObstruction}
                     selectedEndCoordsForNewObstruction={selectedEndCoordsForNewObstruction}
                     clearSelectedCoords={clearSelectedObstructionCoords}
-                    isCreatingSegment={segmentCreationMode === "pickingStart" || segmentCreationMode === "pickingEnd" || (selectedCoordsForNewObstruction !== null && selectedEndCoordsForNewObstruction !== null)}
+                    isCreatingSegment={segmentCreationMode !== 'idle' || (selectedCoordsForNewObstruction !== null && selectedEndCoordsForNewObstruction !== null)}
                   />
                 </div>
               </CardContent>
@@ -240,5 +343,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-    
